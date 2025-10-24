@@ -47,6 +47,8 @@ import com.example.castano.utils.calcularTurnoAutomatico
 import com.example.castano.utils.codigoSemanaDiaTurno
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 
 
 class MainActivity : ComponentActivity() {
@@ -109,6 +111,7 @@ fun IngresoDatosApp(onRevisar: () -> Unit, onVolver: () -> Unit) {
     var lockCajasDer by rememberSaveable { mutableStateOf(false) }
     var lockDescripcion by rememberSaveable { mutableStateOf(false) }
     var confirmarVolver by remember { mutableStateOf(false) }
+    val codeFocus = remember { FocusRequester() }
 
     // ▼▼▼ nuevo estado para mostrar el diálogo
     var showCDia by remember { mutableStateOf(false) }
@@ -165,14 +168,13 @@ fun IngresoDatosApp(onRevisar: () -> Unit, onVolver: () -> Unit) {
             value = codigo,
             onValueChange = { nuevo ->
                 codigo = nuevo
-                // Autolookup si parece EAN (>= 8 dígitos). Ajusta a 13 si prefieres.
                 val digits = nuevo.filter { it.isDigit() }
                 if (digits.length >= 8) lookupProducto(nuevo)
             },
             bordeColor = borde,
-            onBuscar = { lookupProducto(codigo) }   // Enter del teclado o botón Buscar
+            onBuscar = { lookupProducto(codigo) },
+            focusRequester = codeFocus               // ← nuevo
         )
-
 
         FilaDoble("Pata :",     pataIzq, { pataIzq = it }, pataDer, { /* no-op */ }, borde, celesteCampo, derEditable = false)
 
@@ -290,6 +292,33 @@ fun IngresoDatosApp(onRevisar: () -> Unit, onVolver: () -> Unit) {
                     )
                     RegistroStore.add(ctx, reg)
                     Toast.makeText(ctx, "Registro guardado", Toast.LENGTH_SHORT).show()
+
+// Limpiar para nuevo registro
+                    ubicacion = ""
+                    codigo = ""
+                    pataIzq = ""
+                    bandejasIzq = ""
+                    unidadIzq = ""
+                    cajasIzq = ""
+
+// Derivados del catálogo / fijos a 0
+                    pataDer = "0"
+                    bandejasDer = "0"
+                    unidadDer = "0"
+                    cajasDer = "0"
+
+                    descripcion = ""
+                    ean = ""
+
+// C. Día
+                    wwdt = null
+                    turnoSel = null
+                    fechaFactMs = null
+                    fechaCaptMs = null
+
+// Devolver el foco al campo Código
+                    codeFocus.requestFocus()
+
                 }
             }
 
@@ -489,25 +518,30 @@ fun FilaCodigoConBuscar(
     value: String,
     onValueChange: (String) -> Unit,
     bordeColor: Color,
-    onBuscar: () -> Unit
+    onBuscar: () -> Unit,
+    focusRequester: FocusRequester? = null   // ← nuevo (opcional)
 ) {
     val focus = LocalFocusManager.current
 
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Etiqueta("Código :")
         Spacer(Modifier.width(8.dp))
+
+        var textMod: Modifier = Modifier.weight(1f)
+        if (focusRequester != null) textMod = textMod.focusRequester(focusRequester)
+
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
             singleLine = true,
-            modifier = Modifier.weight(1f),
+            modifier = textMod,                  // ← usar el modifier con focusRequester
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Text,
                 imeAction = ImeAction.Search
             ),
             keyboardActions = KeyboardActions(
                 onSearch = {
-                    onBuscar()                           // ¡Llamar, no reasignar!
+                    onBuscar()
                     focus.moveFocus(FocusDirection.Down)
                 }
             ),
@@ -520,18 +554,9 @@ fun FilaCodigoConBuscar(
                 cursorColor = Color.Black
             )
         )
-//        Spacer(Modifier.width(8.dp))
-//        Button(
-//            onClick = onBuscar,
-//            colors = ButtonDefaults.buttonColors(
-//                containerColor = Color(0xFF8CE8F0),
-//                contentColor = Color.Black
-//            ),
-//            shape = RoundedCornerShape(4.dp),
-//            modifier = Modifier.height(48.dp)
-//        ) { Text("Buscar") }
     }
 }
+
 
 @Composable
 private fun FilaUna(
